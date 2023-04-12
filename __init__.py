@@ -11,5 +11,3 @@ if not torch.backends.mps.is_built():
 if not torch.backends.mps.is_available():
     print("MPS is not available")
     sys.exit(1)
-
-mps_device = torch.device("mps")
