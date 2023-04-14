@@ -1,4 +1,5 @@
 import os
+import platform
 from multiprocessing.pool import ThreadPool
 
 import torch
@@ -8,17 +9,22 @@ from transformers import AutoModelForSequenceClassification, AutoTokenizer, Text
 from xlsx.ReadNewsDataset import load_comment_contents
 
 # init values
-mps_device = torch.device("mps")
+if platform.system() == "Windows":
+    device = torch.device("cpu")
+elif platform.system() == "Darwin":
+    device = torch.device("mps")
+else:   # Linux
+    device = torch.device("cuda")
+
 comment_df = load_comment_contents()
 
 model_names = [
     "jaehyeong/koelectra-base-v3-generalized-sentiment-analysis",
+    # "matthewburke/korean_sentiment",
+    # "circulus/koelectra-sentiment-v1",
     "nlp04/korean_sentiment_analysis_dataset3",
-    "nlp04/korean_sentiment_analysis_kcelectra",
-    "nlp04/korean_sentiment_analysis_dataset3_best",
-    "matthewburke/korean_sentiment",
-    "monologg/koelectra-small-finetuned-sentiment",
-    "circulus/koelectra-sentiment-v1",
+    # "nlp04/korean_sentiment_analysis_kcelectra",
+    # "nlp04/korean_sentiment_analysis_dataset3_best",
 ]
 
 length = len(model_names)
@@ -31,26 +37,24 @@ def get_classifier(model_name: str):
     return TextClassificationPipeline(
         model=model,
         tokenizer=tokenizer,
-        device=mps_device
+        device=device
     )
 
 
 def run_classifier(_classifier):
     results = []
-    for idx, row in comment_df.iterrows():
-        pred = _classifier(row["comment_content"])
+    df_slice = comment_df.iloc[:10]
+    for idx, row in df_slice.iterrows():
+        pred = _classifier(row["comment"])
 
         results.append({
-            "news_id": idx[0],
-            "comment_id": idx[1],
-            "comment_original_id": str(row["comment_original_id"]),
-            "comment_content": row["comment_content"],
-            "label": pred[0]["label"],
-            "score": pred[0]["score"],
+            "id": idx,
+            "result_out": pred[0]["label"],
+            "result_score": pred[0]["score"],
         })
-        print(f'{row["comment_content"]}\n>> {pred[0]}')
+        print(f'{row["comment"]}\n>> {pred[0]}')
 
-    return pd.DataFrame(results)
+    return pd.DataFrame(results).set_index('id').columns(["result_out", "result_score"])
 
 
 if __name__ == '__main__':
@@ -68,11 +72,21 @@ if __name__ == '__main__':
     ]
 
     # Thread Join & Get Result
-    result_dfs = [thread.get() for thread in threads]
+    binary_results = [thread.get() for thread in threads[:1]]
+    binary_result_df = comment_df.copy()
+    for br in binary_results:
+        binary_result_df.join(br)
+
+    sentimental_results = [thread.get() for thread in threads[1:]]
+    sentimental_result_df = comment_df.copy()
+    for sr in sentimental_results:
+        sentimental_result_df.join(sr)
+
+    print(binary_result_df)
+    print(sentimental_result_df)
 
     # Save Result
     save_file_name = os.path.join(os.getcwd(), "data", "result.xlsx")
     with pd.ExcelWriter(save_file_name, engine='openpyxl') as writer:
-        for name, df in zip(model_names, result_dfs):
-            clean_name = name.replace("/", "_")
-            df.to_excel(writer, sheet_name=clean_name, index=False)
+        binary_result_df.to_excel(writer, sheet_name="긍부정 결과")
+        sentimental_result_df.to_excel(writer, sheet_name="감정 결과")

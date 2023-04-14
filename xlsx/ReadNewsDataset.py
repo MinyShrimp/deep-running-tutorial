@@ -7,21 +7,11 @@ def get_full_path(filename: str):
     return os.path.join(data_dir, f"{filename}.xlsx")
 
 
-def load_news_contents():
-    file_path = get_full_path("crawling_data")
-
-    return read_excel(
-        file_path,
-        sheet_name="News",
-        index_col=0,
-    )
-
-
 def load_comment_contents():
-    file_path = get_full_path("crawling_data")
+    file_path = get_full_path("comment_dataset")
 
     return read_excel(
         file_path,
         sheet_name="Comments",
-        index_col=[0, 1],
+        index_col=[0],
     )
