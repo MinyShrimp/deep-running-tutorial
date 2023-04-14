@@ -20,11 +20,11 @@ comment_df = load_comment_contents()
 
 model_names = [
     "jaehyeong/koelectra-base-v3-generalized-sentiment-analysis",
-    # "matthewburke/korean_sentiment",
-    # "circulus/koelectra-sentiment-v1",
+    "matthewburke/korean_sentiment",
+    "circulus/koelectra-sentiment-v1",
     "nlp04/korean_sentiment_analysis_dataset3",
-    # "nlp04/korean_sentiment_analysis_kcelectra",
-    # "nlp04/korean_sentiment_analysis_dataset3_best",
+    "nlp04/korean_sentiment_analysis_kcelectra",
+    "nlp04/korean_sentiment_analysis_dataset3_best",
 ]
 
 length = len(model_names)
@@ -42,9 +42,9 @@ def get_classifier(model_name: str):
 
 
 def run_classifier(_classifier):
+    name = _classifier.model.base_model.config.name_or_path
     results = []
-    df_slice = comment_df.iloc[:10]
-    for idx, row in df_slice.iterrows():
+    for idx, row in comment_df.iterrows():
         pred = _classifier(row["comment"])
 
         results.append({
@@ -54,10 +54,20 @@ def run_classifier(_classifier):
         })
         print(f'{row["comment"]}\n>> {pred[0]}')
 
-    return pd.DataFrame(results).set_index('id').columns(["result_out", "result_score"])
+    df = pd.DataFrame(results).set_index('id')
+    df.columns = pd.MultiIndex.from_tuples([(name, "result_out"), (name, "result_score")])
+    return df
 
 
 if __name__ == '__main__':
+    # 원본 복사
+    result_df = comment_df.copy()
+    result_df.columns = pd.MultiIndex.from_tuples([
+        ("original", "comment"),
+        ("original", "result_exactly"),
+        ("original", "result_score")
+    ])
+
     # Model Load
     classifiers = [
         get_classifier(model_name) for model_name in model_names
@@ -72,18 +82,17 @@ if __name__ == '__main__':
     ]
 
     # Thread Join & Get Result
-    binary_results = [thread.get() for thread in threads[:1]]
-    binary_result_df = comment_df.copy()
+    binary_results = [thread.get() for thread in threads[:3]]
+    binary_result_df = result_df.copy()
+
     for br in binary_results:
-        binary_result_df.join(br)
+        binary_result_df = binary_result_df.join(br)
 
-    sentimental_results = [thread.get() for thread in threads[1:]]
-    sentimental_result_df = comment_df.copy()
+    sentimental_results = [thread.get() for thread in threads[3:]]
+    sentimental_result_df = result_df.copy()
+
     for sr in sentimental_results:
-        sentimental_result_df.join(sr)
-
-    print(binary_result_df)
-    print(sentimental_result_df)
+        sentimental_result_df = sentimental_result_df.join(sr)
 
     # Save Result
     save_file_name = os.path.join(os.getcwd(), "data", "result.xlsx")
