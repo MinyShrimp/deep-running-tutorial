@@ -65,7 +65,7 @@ if __name__ == '__main__':
     result_df.columns = pd.MultiIndex.from_tuples([
         ("original", "comment"),
         ("original", "result_exactly"),
-        ("original", "result_score")
+        ("original", "result_out")
     ])
 
     # Model Load
@@ -81,13 +81,14 @@ if __name__ == '__main__':
         ) for classifier in classifiers
     ]
 
-    # Thread Join & Get Result
+    # Thread Join & 긍부정 결과
     binary_results = [thread.get() for thread in threads[:3]]
     binary_result_df = result_df.copy()
 
     for br in binary_results:
         binary_result_df = binary_result_df.join(br)
 
+    # Thread Join & 감정 결과
     sentimental_results = [thread.get() for thread in threads[3:]]
     sentimental_result_df = result_df.copy()
 
